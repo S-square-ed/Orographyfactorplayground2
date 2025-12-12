@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+
+  <title>Orography Factor</title>
+
+  <!-- Fonts (Minimal Luxury) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+    rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- MapLibre GL JS -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css" />
+  <script defer src="https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js"></script>
+
+  <!-- Proj4 (Lambert <-> WGS84) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.10.0/proj4.min.js"></script>
+
+  <!-- App -->
+  <script defer src="script.js"></script>
+</head>
+
+<body>
+  <div class="main">
+    <div class="box">
+      <div class="topbar">
+        <div class="brand">
+          <h1>Orography Factor</h1>
+          <div class="header-subtitle">
+            Minimal tool for indicative site orography factor (0.5 km / 1 km elevation sampling).
+          </div>
+        </div>
+
+        <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light mode"
+          title="Toggle dark/light mode">
+          <span class="theme-ic" aria-hidden="true">☾</span>
+          <span class="theme-tx">Theme</span>
+        </button>
+      </div>
+
+      <div class="content">
+        <div class="input">
+          <label for="inputType">Input type</label>
+          <select class="text-input" id="inputType">
+            <option value="lonlat">Longitude &amp; latitude (WGS84)</option>
+            <option value="address" selected>Address</option>
+            <option value="lambert72">Lambert 72</option>
+            <option value="lambert2008">Lambert 2008</option>
+          </select>
+        </div>
+
+        <div class="input input-panel" id="panelAddress">
+          <label for="address">Address</label>
+          <input type="text" class="text-input" id="address" autocomplete="off"
+            value="Pl. de l'Atomium 1, 1020 Bruxelles" />
+        </div>
+
+        <div class="input input-panel hidden" id="panelLonLat">
+          <label>Longitude &amp; latitude (WGS84)</label>
+          <div class="two-col">
+            <input type="text" class="text-input" id="lon_input" autocomplete="off"
+              placeholder="Longitude (e.g. 4.3517)" />
+            <input type="text" class="text-input" id="lat_input" autocomplete="off"
+              placeholder="Latitude (e.g. 50.8503)" />
+          </div>
+        </div>
+
+        <div class="input input-panel hidden" id="panelLambert">
+          <label><span id="lambert_input_label">Lambert 72</span> coordinates</label>
+          <div class="two-col">
+            <input type="text" class="text-input" id="lambert_x_input" autocomplete="off"
+              placeholder="X / Easting (m)" />
+            <input type="text" class="text-input" id="lambert_y_input" autocomplete="off"
+              placeholder="Y / Northing (m)" />
+          </div>
+          <div class="small-note">Tip: ensure you choose the correct Lambert system (72 vs 2008).</div>
+        </div>
+
+        <div class="coord-display">
+          <div>
+            WGS84: Lat <span id="latitude_inline">—</span> — Lon <span id="longitude_inline">—</span>
+          </div>
+          <div>
+            <span id="lambert_crs_inline">Lambert</span>:
+            X <span id="lambert_x_inline">—</span> — Y <span id="lambert_y_inline">—</span>
+          </div>
+        </div>
+
+        <div>
+          <button class="calculate" id="submit" onclick="calculate();">Search</button>
+        </div>
+
+        <div class="input">
+          <label for="height">Height of tower [m]</label>
+          <input type="text" class="text-input" id="height" autocomplete="off" required value="30"
+            oninput="calculateTotalElevation()" />
+        </div>
+
+        <div class="result" id="result">
+          <div class="kv">
+            <div>Elevation: <span id="elevation"></span></div>
+          </div>
+
+          <table>
+            <tr>
+              <th>[meters]</th>
+              <th>1km</th>
+              <th>0.5km</th>
+            </tr>
+            <tr>
+              <td>North</td>
+              <td><span id="elevation_north_1km"></span></td>
+              <td><span id="elevation_north_05km"></span></td>
+            </tr>
+            <tr>
+              <td>East</td>
+              <td><span id="elevation_east_1km"></span></td>
+              <td><span id="elevation_east_05km"></span></td>
+            </tr>
+            <tr>
+              <td>South</td>
+              <td><span id="elevation_south_1km"></span></td>
+              <td><span id="elevation_south_05km"></span></td>
+            </tr>
+            <tr>
+              <td>West</td>
+              <td><span id="elevation_west_1km"></span></td>
+              <td><span id="elevation_west_05km"></span></td>
+            </tr>
+          </table>
+
+          <div class="factor">
+            <div class="factor-title">Orography Factor</div>
+            <div class="factor-value"><span id="orography_factor"></span></div>
+            <div class="factor-note"><span id="orography_factor_comment"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="mapWrap" class="map-wrap">
+      <div class="map-toolbar">
+        <select id="basemapSelect" class="map-select" title="Basemap">
+          <option value="cartoLight" selected>CARTO Light</option>
+          <option value="cartoDark">CARTO Dark</option>
+          <option value="osm">OpenStreetMap</option>
+        </select>
+
+        <button id="mapFullscreenBtn" class="map-fs-btn" type="button" title="Toggle map full screen">
+          Full screen
+        </button>
+      </div>
+
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    <p class="disc-title">Disclaimers</p>
+
+    <ul>
+      <li>Outputs are indicative and must be verified with engineering judgement and project-specific checks.</li>
+      <li>This does not replace a full Eurocode-compliant site study where required.</li>
+      <li>Lambert 72 and Lambert 2008 are different reference systems. Use the correct one for your source data.</li>
+      <li>Elevations and geocoding rely on third-party services and may be rate-limited, unavailable, or differ from local survey values.</li>
+      <li>Do not use as the sole basis for safety-critical decisions.</li>
+    </ul>
+
+    <div class="disc-links">
+      <div class="api-link"><a href="https://nominatim.org/" target="_blank" rel="noreferrer">Nominatim API</a></div>
+      <div class="api-link"><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo API</a></div>
+    </div>
+
+    <div class="qbic-footer">
+      <img class="qbic-logo" alt="QBIC"
+        src="https://www.qbic.gent/wp-content/uploads/2020/08/QBIC-logo_white-final.svg" />
+    </div>
+
+    <p class="disc-foot">© QBIC ARCHITECTEN BV — internal prototype / calculator.</p>
+  </div>
+</body>
+
+</html>
